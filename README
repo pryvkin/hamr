@@ -1,2 +1,76 @@
-Run genome_scan.sh
+=== HAMR: High Throughput Annotation of Modified Ribonucleotides
+Uses nucleotide patterns in RNA-seq to infer the presence of non-canonical
+(covalently modified) nucleotides and/or RNA edits.
 
+
+=== Required input files
+ - BAM file (aligned sequence reads, preferably produced by Bowtie)
+ - Genome sequence FASTA file (must be the same one used to generate the BAM)
+
+
+=== Usage
+
+1) Run genome_scan.sh
+Type ./genome_scan.sh to see the list of parameters
+
+
+=== Description of parameters
+in_bam
+    Input BAM file
+
+genome_fas
+    Input FASTA file with genomic sequence
+
+min_q (0-40)
+    Minimum base call Q score to consider a site. Recommended: 30
+
+min_coverage (>1)
+    Minimum coverage at a site to consider it. Recommended: 10
+
+seq_err (0-1)
+    Assumed basecalling error rate. Recommended: 0.01
+
+hypothesis (H1 or H4)
+    H1 (H0_1 in the paper) calls any non-reference nucleotide a candidate site. This should be used
+      when the sequenced genome is unlikely to have polymorphisms relative to the
+      reference (as in the case of a monogenic model organism)
+    H4 (H0_2 in the paper) calls any non-bi-allelic site a candidate site. This model is stricter
+      since not only must a significant number of non-reference calls be present,
+      3 or 4 distinct nucleotides must be detected.
+
+max_p (0-1)
+    p-value cutoff for statistical significance. Set to 1 to force usage of FDR instead of p.
+
+max_fdr (0-1)
+    FDR-controlled p-value cutoff. Set to 1 to force usage of p-value instead.
+
+out_file
+    Output file containing the called sites
+
+filter_ends (0 or 1)
+    If set to 1, HAMR will ignore the 5' and 3' ends of reads when looking for candidate sites.
+
+not_strand_specific (0 or 1)
+    Set this to 1 when the sequencing library is NOT strand-specific.
+
+
+====
+#  Copyright (c) 2013 University of Pennsylvania
+#
+#  Permission is hereby granted, free of charge, to any person obtaining a 
+#  copy of this software and associated documentation files (the "Software"), 
+#  to deal in the Software without restriction, including without limitation 
+#  the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+#  and/or sell copies of the Software, and to permit persons to whom the 
+#  Software is furnished to do so, subject to the following conditions:
+#
+#  The above copyright notice and this permission notice shall be included in 
+#  all copies or substantial portions of the Software.
+#
+#  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS 
+#  OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+#  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+#  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+#  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+#  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+#  DEALINGS IN THE SOFTWARE.
