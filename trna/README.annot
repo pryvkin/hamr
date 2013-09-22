@@ -1,6 +1,12 @@
-# Files needed to annotate tRNAs in a genome:
-
+### Files needed to annotate tRNAs in a genome:
 # Genome sequence (single FASTA file)
-# Gene & repeat,etc. annotation incl. tRNAs (gff)
-# tRNA locations (bed)
+# chromosome lengths for genome (chromInfo.txt)
+# Geneome feature annotation incl. tRNAs (gff)
+# tRNA loci (bed)
+# RFAM covariance model for tRNAs (tRNA.cm)
 
+### Software needed:
+# Infernal v1.0.2
+# tRNAscan-SE 1.03
+# bowtie
+# BEDtools
