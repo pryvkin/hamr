@@ -1,4 +1,4 @@
-SAMTOOLS_DIR=~/src/samtools
+SAMTOOLS_DIR=samtools
 
 all: rnapileup filter_pileup rnapileup2mismatchbed
 
