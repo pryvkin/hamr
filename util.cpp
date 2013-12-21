@@ -18,54 +18,38 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 //  DEALINGS IN THE SOFTWARE.
 
-#include <iostream>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "hamr.h"
 
 using namespace std;
 
-void test_parse_arguments(const vector<string> &args) {
-  arg_collection value_args;
-  vector<string> pos_args;
-  parse_arguments(args, value_args, pos_args);
-  for (unsigned int i=0; i < pos_args.size(); ++i)
-    cout << "Position arg: " << pos_args[i] << "\n";
-  for (arg_collection::iterator it = value_args.begin();
-       it != value_args.end(); ++it)
-    cout << "Value arg: " << it->first << ": "
-	 << it->second << "\n";
-}
+// parses a list of command line arguments where each argument is either
+// <value> or --switch or --key=value
+// the first type, positional arguments, go into positional_args
+// the rest go into a map of key=value
+void parse_arguments(const vector<string> &args,
+		     arg_collection &value_args,
+		     vector<string> &positional_args) {
+  for(unsigned int i=0; i < args.size(); ++i) {
+    if (args[i].empty())
+      continue;
+      
+    if (args[i][0] == '-') {
+      unsigned int equals_at = args[i].find('=');
+      string key = args[i].substr(0, equals_at);
+      string value = "";
 
-int main(int argc, char **argv) {
-  if (argc < 2) {
-    cerr << "USAGE: " << argv[0] << " cmd\n" 
-	 << "    where cmd is rnapileup|filter_pileup|rnapileup2mismatchbed\n";
-    return(1);
+      if (equals_at != string::npos &&
+	  equals_at < (args[i].size() - 1))
+	  value = args[i].substr(1+equals_at, string::npos );
+
+      value_args[key] = value;
+
+    } else {
+      positional_args.push_back(args[i]);
+    }
   }
-
-  vector<string> args;
-
-  // make args[0] be "hamr_cmd <cmd>"
-  string cmd = argv[1];
-  args.push_back(string(argv[0]) + " " + cmd);
-  for(int i=2; i < argc; ++i)
-    args.push_back(argv[i]);
-
-  test_parse_arguments(args);
-
-  if (cmd == "rnapileup")
-    return (rnapileup_main(args));
-  else if (cmd == "filter_pileup")
-    return (filter_pileup_main(args));
-  else if (cmd == "rnapileup2mismatchbed")
-    return (rnapileup2mismatchbed_main(args));
-  else {
-    cerr << "Invalid command: " << cmd << "\n";
-    return(1);
-  }
-  
-
-  return(0);
 }

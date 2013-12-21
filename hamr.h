@@ -20,11 +20,19 @@
 
 #include <vector>
 #include <string>
+#include <map>
 
 using namespace std;
 
-extern int rnapileup_main (const vector<string> &args);
-extern int filter_pileup_main (const vector<string> &args);
-extern int rnapileup2mismatchbed_main (const vector<string> &args);
+int rnapileup_main (const vector<string> &args);
+int filter_pileup_main (const vector<string> &args);
+int rnapileup2mismatchbed_main (const vector<string> &args);
+
+// key=value command line arguments
+typedef map<string, string> arg_collection;
+
+void parse_arguments(const vector<string> &args,
+		     arg_collection &value_args,
+		     vector<string> &positional_args);
 
 
