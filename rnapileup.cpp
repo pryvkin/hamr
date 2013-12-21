@@ -43,6 +43,8 @@
 #include <deque>
 #include <cctype>
 
+#include "hamr.h"
+
 using namespace std;
 
 ///////////////////////
@@ -105,29 +107,27 @@ public:
 
 /////////////////////
 
-int main(int argc, char **argv) {
+int rnapileup_main(const vector<string> &raw_args) {
   vector<string> opts;
   vector<string> args;
 
-  for(int i=1; i < argc; ++i) {
-    string a(argv[i]);
-    if (a.size() > 1 && a[0] == '-')
-      opts.push_back(a);
+  for(unsigned int i=1; i < raw_args.size(); ++i)
+    if (raw_args[i].size() > 1 && raw_args[i][0] == '-')
+      opts.push_back(raw_args[i]);
     else
-      args.push_back(a);
-  }
-  
+      args.push_back(raw_args[i]);
+
   bool opts_valid = true;
   bool no_ss = false;         // not strand specific
-  for(int i=0; i < opts.size(); ++i) {
+  for(unsigned int i=0; i < opts.size(); ++i) {
     if (opts[i] == "--noss")
       no_ss = true;
     else
       opts_valid = false;
   }
 
-  if(args.size() < 2 || !opts_valid) {
-    cerr << "USAGE: " << argv[0] << "[options] reads.bam ref.fasta\n";
+  if(raw_args.size() < 2 || !opts_valid) {
+    cerr << "USAGE: " << raw_args[0] << " [options] reads.bam ref.fasta\n";
     cerr << "       --noss        Not strand-specific (convert everything to +)\n";
     return 1;
   }

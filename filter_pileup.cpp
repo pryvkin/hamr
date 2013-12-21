@@ -27,15 +27,13 @@
 #include <cstdlib>
 #include <algorithm>
 
+#include "hamr.h"
+
 using namespace std;
 
 struct pileup_pos {
-  bool start;
-  bool end;
-  char mapq;
-  char nuc;
-  char q;
-  char p;
+  bool start, end;
+  char mapq, nuc, q, p;
   pileup_pos() : start(false), end(false), mapq('~'), nuc(' '), q(' '), p(' ')
    { }
 };
@@ -47,6 +45,7 @@ struct ThresholdQuality {
     return ( int((p.q)-33) < minq );
   }
 };
+
 // remove positions corresponding to 5' or 3' ends of reads
 // which can be error-prone
 struct FilterEnds {
@@ -56,12 +55,9 @@ struct FilterEnds {
   }
 };
 
-
-
-int main( int argc, char **argv) {
-  
-  if (argc < 3) {
-    cerr << "USAGE: " << argv[0] << " in.rnapileup  minQ [remove_ends]\n";
+int filter_pileup_main( const vector<string> &args ) {
+  if (args.size() < 4) {
+    cerr << "USAGE: " << args[0] << " in.rnapileup  minQ min_coverage [remove_ends]\n";
     return(1);
   }
 
@@ -69,10 +65,10 @@ int main( int argc, char **argv) {
   istream *p_infile;
   ifstream *p_in;
 
-  if (string(argv[1]) != "-") {
-    p_in = new ifstream(argv[1]);
+  if (args[1] != "-") {
+    p_in = new ifstream(args[1].c_str());
     if (!p_in->is_open()) {
-      cerr << "Could not open file " << argv[1] << "\n";
+      cerr << "Could not open file " << args[1] << "\n";
       return(1);
     }
     p_infile = p_in;
@@ -80,14 +76,15 @@ int main( int argc, char **argv) {
     p_infile = &cin;
 
   bool do_remove_ends = false;
-  if (argc == 4 && string(argv[3]) == "1") {
+  if (args.size() == 4 && args[4] == "1") {
     cerr << "removing ends\n";
     do_remove_ends = true;
   }
 
   istream &infile = *p_infile;
 
-  int minq = atoi(argv[2]);
+  int minq = atoi(args[2].c_str());
+  unsigned int min_cov = atoi(args[3].c_str());
 
   ThresholdQuality threshold_quality(minq);
   FilterEnds filter_ends;
@@ -100,7 +97,10 @@ int main( int argc, char **argv) {
     getline(linestr, pos, '\t');
     getline(linestr, ref, '\t');
     getline(linestr, nstr, '\t');
-    int n = atoi(nstr.c_str());
+    unsigned int n = atoi(nstr.c_str());
+
+    if (n < min_cov)
+      continue;
 
     vector<pileup_pos> data(n);
     string nucstr, qstr, pstr;
@@ -109,7 +109,7 @@ int main( int argc, char **argv) {
     getline(linestr, pstr, '\t');
     
     int read = 0;  // 0..n
-    for(int i=0; i < nucstr.size(); ++i) {
+    for(unsigned int i=0; i < nucstr.size(); ++i) {
       if (nucstr[i] == '^') {
 	data[read].start = true;
 	data[read].mapq = nucstr[++i];
@@ -133,7 +133,7 @@ int main( int argc, char **argv) {
       data.erase(remove_if(data.begin(), data.end(), filter_ends),
 		 data.end());
 
-    if (data.empty())
+    if (data.size() < min_cov)
       continue;
 
     cout << chr << "\t" << pos << "\t" << ref << "\t"
@@ -141,7 +141,7 @@ int main( int argc, char **argv) {
 
     string new_quals(data.size(), ' ');
     string new_pos(data.size(), ' ');
-    for(int i=0; i < data.size(); ++i) {
+    for(unsigned int i=0; i < data.size(); ++i) {
       new_quals[i] = data[i].q;
       new_pos[i] = data[i].p;
       if (data[i].start)

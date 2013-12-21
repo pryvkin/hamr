@@ -1,4 +1,4 @@
-#!/usr/bin/Rscript env
+#!/usr/bin/env Rscript
 #  Copyright (c) 2013 University of Pennsylvania
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a
@@ -18,6 +18,16 @@
 #  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 #  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 #  DEALINGS IN THE SOFTWARE.
+
+### detect_mods.R
+## Detect modifications using nucleotide frequencies
+# Input:   - Nucleotide frequency table
+#          - Sequencing error rate
+#          - Hypothesis type (H1 or H4)
+#          - Maximum p-value
+#          - Maximum FDR-adjusted p-value
+#
+# Output:  - Table containing results for each site
 
 if (length(commandArgs(T)) < 5) {
   cat("USAGE: detect_mods.R in_table seq_err hyp max_p max_fdr\n")

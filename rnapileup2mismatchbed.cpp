@@ -27,11 +27,13 @@
 #include <cstring>
 #include <algorithm>
 
+#include "hamr.h"
+
 using namespace std;
 
-int main( int argc, char **argv) {
-  if (argc < 2) {
-    cerr << "USAGE: " << argv[0] << " in.rnapileup\n";
+int rnapileup2mismatchbed_main( const vector<string> &args ) {
+  if (args.size() < 2) {
+    cerr << "USAGE: " << args[0] << " in.rnapileup\n";
     return(1);
   }
 
@@ -39,10 +41,10 @@ int main( int argc, char **argv) {
   // to come from stdin or a file
   istream* p_infile;
   ifstream* p_in;
-  if (string(argv[1]) != "-") {
-    p_in = new ifstream(argv[1]);
+  if (args[1] != "-") {
+    p_in = new ifstream(args[1].c_str());
     if (!p_in->is_open()) {
-      cerr << "Could not open file " << argv[1] << "\n";
+      cerr << "Could not open file " << args[1] << "\n";
       return(1);
     }
     p_infile = p_in;
@@ -93,7 +95,7 @@ int main( int argc, char **argv) {
     char ref=refstr[0];
 
     getline(linestr, nstr, '\t');
-    int n = atoi(nstr.c_str());
+    //int n = atoi(nstr.c_str());
 
     string nucstr;
     getline(linestr, nucstr, '\t');
@@ -110,28 +112,31 @@ int main( int argc, char **argv) {
     string readposstr_by_nuc[256];
 
     int read_idx=0;
-    for(int i=0; i < nucstr.size(); ++i) {
+    for(unsigned int i=0; i < nucstr.size(); ++i) {
       if (nucstr[i] == '^')
 	i += 2; // skip ^ and mapq
       else if (nucstr[i] == '$')
 	i += 1; // skip $
-      ++ counts[nucstr[i]];
-      readposstr_by_nuc[ nucstr[i] ] += readposstr[read_idx];
+      ++ counts[(unsigned int)nucstr[i]];
+      readposstr_by_nuc[ (unsigned int)nucstr[i] ] += readposstr[read_idx];
       ++ read_idx;
     }
 
-    for(int i=0; i < relevant_nucs.size(); ++i) {
+    for(unsigned int i=0; i < relevant_nucs.size(); ++i) {
       char strand = '+';
       char new_ref = ref;
-
       char nuc = relevant_nucs[i];
       char orig_nuc = nuc;
-      int count = counts[nuc];
+      unsigned int nuc_idx = (unsigned int)nuc;
+      unsigned int ref_nuc_idx = (unsigned int)ref;
+      unsigned int orig_nuc_idx = (unsigned int)orig_nuc;
+
+      int count = counts[nuc_idx];
       if (count > 0) {
-	if (rev_strand[nuc]) {
+	if (rev_strand[nuc_idx]) {
 	  strand = '-';
-	  new_ref = complement[ref];
-	  nuc = complement[nuc];
+	  new_ref = complement[ref_nuc_idx];
+	  nuc = complement[nuc_idx];
 	}
 	// condense read position string (which is Sanger encoded)
 	// into a histogram of the form x:count,x:count,...
@@ -140,8 +145,8 @@ int main( int argc, char **argv) {
 
 	// track max_readpos to speed up the loop below
 	int max_readpos=0;
-	for(int i=0; i < readposstr_by_nuc[orig_nuc].size(); ++i) {
-	  int readpos = int(readposstr_by_nuc[orig_nuc][i])-33;
+	for(unsigned int i=0; i < readposstr_by_nuc[orig_nuc_idx].size(); ++i) {
+	  int readpos = int(readposstr_by_nuc[orig_nuc_idx][i])-33;
 	  ++ readpos_counts[readpos];
 	  max_readpos = (readpos > max_readpos) ? readpos : max_readpos;
 	}

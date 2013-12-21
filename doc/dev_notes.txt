@@ -1,0 +1,6 @@
+Improve RAM usage and output size of rnapileup
+  - require sorted chromosomes and deallocate
+    when done with each chr
+  - move end-filtering, Q-filtering, and coverage-filtering
+    into rnapileup
+  - add quiet mode

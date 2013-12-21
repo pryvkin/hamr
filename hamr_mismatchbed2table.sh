@@ -1,4 +1,4 @@
-#!/usr/bin/env Rscript
+#!/bin/bash
 #  Copyright (c) 2013 University of Pennsylvania
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a
@@ -19,41 +19,54 @@
 #  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 #  DEALINGS IN THE SOFTWARE.
 
-### classify_mods.R
-## Classify modification types using a pre-computed model trained
-## on an organism or set of organisms
-# Input:  - HAMR output table
-#         - Rdata containing a modification model
-#
-# Output: - HAMR output table with additional columns
-#             for predicted modification types
+# takes mismatch bed file on stdin and counts nucleotide
+#   frequencies at each site, resulting in a 
+# nucleotide frequency table
 
-library('class')
-
-if (length(commandArgs(T)) < 2) {
-  cat("USAGE: classify_mods.R table model\n")
-  q()
+awk '
+function init() {
+  counts["A"] = 0;
+  counts["C"] = 0;
+  counts["G"] = 0;
+  counts["T"] = 0;
+  counts["NR"] = 0;
 }
-
-infn = commandArgs(T)[1]
-modelfn = commandArgs(T)[2]
-
-load(modelfn)
-
-nucs = c('A','C','G','T')
-
-x = read.table(infn, as.is=T, sep="\t", header=T)
-
-x = x[x$sig == TRUE,]
-
-for(i in 1:nrow(x)) {
- precursor = sub('T', 'U', x[i,'refnuc']) 
-  x.p = pred.mod(modmodel2, precursor,
-    (data.frame(x[i,nucs[nucs != x[i,'refnuc']]])))
-  x[i,'pred.mod'] = x.p
+function output() {
+  print prev_chr, prev_bp, prev_str, prev_from_nuc,
+     counts["A"], counts["C"], counts["G"],counts["T"],counts["NR"]
 }
+BEGIN {
+  FS="\t"
+  OFS="\t"
+  init()
+}
+{
+  loc = $1";"$2";"$6
 
-write.table(x, file="", row.names=F, col.names=T, quote=F,sep="\t")
+  if (NR > 1 && (loc != prev_loc)) {
+    output()
+    init()
+  }
 
+  split($4,a,">")
+  from_nuc = a[1]
+  to_nuc = a[2]
 
+  split($5,b,";")
+  count = b[1]
+
+  if (to_nuc == ".")
+    to_nuc = from_nuc
+  else
+    counts["NR"] += count
+
+  counts[to_nuc] += count
+
+  prev_from_nuc = from_nuc
+  prev_chr = $1
+  prev_bp = $2
+  prev_str = $6
+  prev_loc = $1";"$2";"$6
+}
+END { output() }'
 

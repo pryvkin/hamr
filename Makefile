@@ -1,17 +1,26 @@
 SAMTOOLS_DIR=samtools
 
-all: rnapileup filter_pileup rnapileup2mismatchbed
+#DEBUG=
+DEBUG=-g
 
-rnapileup: rnapileup.cpp
-	g++ -O2 -L $(SAMTOOLS_DIR) -I $(SAMTOOLS_DIR) $? -o $@ -lbam -lz -pthread
+CXX = g++
+CXXFLAGS = -O2 -Wall $(DEBUG) -I $(SAMTOOLS_DIR)
+LFLAGS = -L $(SAMTOOLS_DIR) -lbam -lz -lpthread
 
-filter_pileup: filter_pileup.cpp
-	g++ -O2 -L $(SAMTOOLS_DIR) -I $(SAMTOOLS_DIR) $? -o $@ -lbam -lz
+PROG = hamr_cmd
+SRCS = main.cpp rnapileup.cpp filter_pileup.cpp rnapileup2mismatchbed.cpp
+HDRS = hamr.h
+OBJS = $(SRCS:cpp=o)
 
-rnapileup2mismatchbed: rnapileup2mismatchbed.cpp
-	g++ -O2 $? -o $@
+all: $(PROG)
+
+$(PROG): $(OBJS) $(HDRS)
+	$(CXX) $(CXXFLAGS) $(LFLAGS) $(OBJS) -o $@ $(LFLAGS)
+
+.cpp.o:
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm rnapileup filter_pileup rnapileup2mismatchbed
+	rm -f $(OBJS) $(PROG)
 
 

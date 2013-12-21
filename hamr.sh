@@ -23,7 +23,7 @@
 if [ $# -lt 11 ]
 then
   echo "USAGE: in_bam genome_fas min_q min_coverage seq_err \
- hypothesis max_p max_fdr out_file filter_ends[0|1] not_strand_specific[0|1]" >&2
+ hypothesis max_p max_fdr out_prefix filter_ends[0|1] not_strand_specific[0|1]" >&2
   exit 1
 fi
 
@@ -35,7 +35,7 @@ seq_err=$5
 hypothesis=$6
 max_p=$7
 max_fdr=$8
-outfn=$9
+outpre=$9
 shift
 filterends=$9
 shift
@@ -54,41 +54,50 @@ else
     not_strand_specific=
 fi
 
-if [[ -z $TMPDIR ]]; then
-    export TMPDIR=/tmp
+if [[ ! -e `dirname $outpre` ]]; then
+    echo "Creating output directory \"`dirname $outpre`\" ..."
+    mkdir -p `dirname $outpre`
 fi
 
-mmbed=${TMPDIR}/$$.mismatches.bed
+echo "Computing RNA pileup..." >&2
+./hamr_cmd rnapileup $not_strand_specific $in_bam $genome_fas \
+ > ${outpre}.rnapileup
 
-echo "getting mismatches..." >&2
-./rnapileup $not_strand_specific $in_bam $genome_fas | \
-  ./filter_pileup /dev/stdin $min_q $filterends | \
-  awk '$4 >= '$min_coverage | \
-  ./rnapileup2mismatchbed - > $mmbed
+echo "Filtering pileup by Q score..." >&2
+./hamr_cmd filter_pileup ${outpre}.rnapileup  $min_q $min_coverage $filterends \
+ > ${outpre}.rnapileup.filt
+
+echo "Converting pileup to BED" >&2
+./hamr_cmd rnapileup2mismatchbed ${outpre}.rnapileup.filt \
+ > ${outpre}_mismatches.bed
 
 # it's easier to process consecutive lines for each locus
 # but order isn't guaranteed wrt strand in mismatches.bed
 # so split it into + and - files for processing
 
-echo "converting fwd strand to nuc freq table..." >&2
-awk '$6 == "+"' $mmbed | bash mismatchbed2table.sh | \
-  awk '$9 > 0' > \
-    ${mmbed}.txt.fwd &
+# NOTE: doing this in parallel, thus requiring 2 CPUs
 
-echo "converting rev strand to nuc freq table..." >&2
-awk '$6 == "-"' $mmbed | bash mismatchbed2table.sh | \
+echo "Converting fwd strand to nuc freq table..." >&2
+awk '$6 == "+"' ${outpre}_mismatches.bed | \
+  ./hamr_mismatchbed2table.sh | \
   awk '$9 > 0' > \
-    ${mmbed}.txt.rev &
+    ${outpre}_mismatches_fwd.txt &
+
+echo "Converting rev strand to nuc freq table..." >&2
+awk '$6 == "-"' ${outpre}_mismatches.bed | \
+  ./hamr_mismatchbed2table.sh | \
+  awk '$9 > 0' > \
+    ${outpre}_mismatches_rev.txt &
 
 wait
 
-echo "sorting nuc freq table..." >&2
-sort -m -k1,1 -k2n,2n -k3 ${mmbed}.txt.fwd ${mmbed}.txt.rev > \
-  ${mmbed}.txt
+echo "Sorting nuc freq table..." >&2
+sort -m -k1,1 -k2n,2n -k3 \
+  ${outpre}_mismatches_fwd.txt ${outpre}_mismatches_rev.txt \
+  > ${outpre}_mismatches_sorted.txt
 
-echo "testing for statistical significance..." >&2
-Rscript detect_mods.R ${mmbed}.txt \
+echo "Testing for statistical significance..." >&2
+Rscript detect_mods.R ${outpre}_mismatches_sorted.txt \
   $seq_err $hypothesis $max_p $max_fdr > \
-  $outfn
+  ${outpre}_mods.txt
 
-rm $mmbed ${mmbed}.txt.fwd ${mmbed}.txt.rev ${mmbed}.txt
