@@ -2,7 +2,7 @@
 Uses nucleotide patterns in RNA-seq to infer the presence of non-canonical
 (covalently modified) nucleotides and/or RNA edits.
 
-=== HAMR v1.0 ===
+=== HAMR v1.0.0 ===
 
 === Building / Installation
 See the "INSTALL" file.
