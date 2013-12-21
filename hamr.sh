@@ -19,57 +19,98 @@
 #  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 #  DEALINGS IN THE SOFTWARE.
 
+PROGRAM="HAMR"
+VERSION="1.2.0"
 
-if [ $# -lt 11 ]
-then
-  echo "USAGE: in_bam genome_fas min_q min_coverage seq_err \
- hypothesis max_p max_fdr out_prefix filter_ends[0|1] not_strand_specific[0|1]" >&2
-  exit 1
+function print_usage() {
+  echo "USAGE: $0 [OPTIONS] reads.bam genome.fasta output_prefix" >&2
+  echo "" >&2
+  echo "    OPTIONS:" >&2
+  echo "     Sequencing data options:" >&2
+  ./hamr_cmd rnapileup --list-options
+  echo "      --no-check-sorted      Don't check if BAM is sorted" >&2
+  echo "" >&2
+  echo "     Modification detection options:" >&2
+  ./hamr_detect_mods.R --list-options
+  echo "" >&2
+  echo "      --help                 Print this message and exit" >&2
+  echo "      --version              Print version number and exit" >&2
+}
+
+opts=()
+args=()
+
+req_args=3
+
+# parse command line arguments
+while test $# -gt 0
+do
+    if [[ "${1:0:1}" == "-" ]]; then
+	opts=("${opts[@]}" "$1")
+    else
+	args=("${args[@]}" "$1")
+    fi
+    shift
+done
+
+# parse switches and value options
+for i in "${opts[@]}"; do
+    case $i in
+	--help) print_usage; exit 0;;
+	--version) echo "${PROGRAM} ${VERSION}"; exit 0;;
+	--no-check-sorted) no_check_sorted=1;;
+    esac
+done
+
+# ensure we have enough positional arguments
+nargs=${#args[@]}
+if [[ "${nargs}" -lt "${req_args}" ]]; then
+    print_usage; exit 1;
 fi
 
-in_bam=$1
-genome_fas=$2
-min_q=$3
-min_coverage=$4
+in_bam="${args[0]}"
+genome_fas="${args[1]}"
+outpre="${args[2]}"
+
 seq_err=$5
 hypothesis=$6
 max_p=$7
 max_fdr=$8
-outpre=$9
-shift
-filterends=$9
-shift
-not_strand_specific=$9
-
-if [[ $hypothesis != "H1" && $hypothesis != "H4" ]]
-then
-  echo "hypothesis must be 'H1' or 'H4'" >&2
-  exit 1
-fi
-
-if [[ $not_strand_specific = "1" ]]
-then
-    not_strand_specific=--noss
-else
-    not_strand_specific=
-fi
 
 if [[ ! -e `dirname $outpre` ]]; then
     echo "Creating output directory \"`dirname $outpre`\" ..."
     mkdir -p `dirname $outpre`
 fi
 
+if [[ -z $no_check_sorted ]]; then
+    echo "Checking if BAM file is sorted..." >&2
+    samtools view "${in_bam}" | sort -k3,3 -k4n,4n --check=quiet
+    if [[ $? -ne 0 ]]; then
+	echo "ERROR: BAM file not sorted. If this is incorrect," >&2
+	echo "         proceed anyway with --no-check-sorted" >&2
+	exit 1
+    fi
+else
+    echo "Skipping check of BAM sortedness..." >&2
+fi
+
+# Generate RNA pileup
 echo "Computing RNA pileup..." >&2
-./hamr_cmd rnapileup $not_strand_specific $in_bam $genome_fas \
+./hamr_cmd rnapileup ${opts[@]} "${in_bam}" "${genome_fas}" \
  > ${outpre}.rnapileup
 
-echo "Filtering pileup by Q score..." >&2
-./hamr_cmd filter_pileup ${outpre}.rnapileup  $min_q $min_coverage $filterends \
- > ${outpre}.rnapileup.filt
+if [[ $? -ne 0 ]]; then
+    echo "ERROR: Failed to generate RNA pileup" >&2
+    exit 1
+else
+    echo "Succesfully generated RNA pileup" >&2
+fi
 
+# Convert RNA pileup to BED file
 echo "Converting pileup to BED" >&2
-./hamr_cmd rnapileup2mismatchbed ${outpre}.rnapileup.filt \
+./hamr_cmd rnapileup2mismatchbed ${outpre}.rnapileup \
  > ${outpre}_mismatches.bed
+
 
 # it's easier to process consecutive lines for each locus
 # but order isn't guaranteed wrt strand in mismatches.bed
@@ -96,8 +137,16 @@ sort -m -k1,1 -k2n,2n -k3 \
   ${outpre}_mismatches_fwd.txt ${outpre}_mismatches_rev.txt \
   > ${outpre}_mismatches_sorted.txt
 
+# Detect modifications using statistical testing
 echo "Testing for statistical significance..." >&2
-Rscript detect_mods.R ${outpre}_mismatches_sorted.txt \
-  $seq_err $hypothesis $max_p $max_fdr > \
-  ${outpre}_mods.txt
+./hamr_detect_mods.R ${opts[@]} ${outpre}_mismatches_sorted.txt \
+  > ${outpre}_mods.txt
 
+if [[ $? -ne 0 ]]; then
+    echo "ERROR: statistical testing failed" >&2
+    exit 1
+else
+    echo "Statistical testing successful" >&2
+fi
+
+echo "Analysis complete." >&2

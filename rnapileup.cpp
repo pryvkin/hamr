@@ -18,37 +18,42 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 //  DEALINGS IN THE SOFTWARE.
 
-/* rnapileup
-     generates pileup for RNAseq data:
-      - genomic strands are treated separately
-      - does not support indels
-*/
+////  rnapileup
+// Generates pileup for RNAseq data:
+//      Requires a sorted BAM file
+//      Genomic strands are treated separately unless --no-strand-specific
+//      Does not support indels
 
-//  2.0 - adds another column with position-along-read data
+//  2.0 - Added another column with position-along-read data
 //        (Sanger encoded just like base quals; X-33 = position along
 //          read from 5' end, starting at 0)
-
 //  2.1 - Now supports soft-clipping and discards reads with indels
-
+//  2.2 - Integrated into HAMR
+//        Added several options for filtering input, yielding
+//          a smaller output file
+    
 // #define DEBUGMODE
 
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <cstdlib>
+#include <cstdio>
 #include <algorithm>
 #include <vector>
-#include "sam.h"
-#include "faidx.h"
 #include <deque>
 #include <cctype>
 
+#include "sam.h"
+#include "faidx.h"
 #include "hamr.h"
 
 using namespace std;
 
 ///////////////////////
 
+// represents pileup data at one site
 struct Pileup {
   int pos;
   char ref;
@@ -66,10 +71,23 @@ struct Pileup {
 };
 
 void process_queue(deque<Pileup> &q, int upto_pos, bool process_all,
-		   const string &ref_id) {
+		   const string &ref_id,
+		   int min_coverage,
+		   unsigned long &sites_excluded_cov,
+		   unsigned long &sites_encountered) {
   // output one-based coords
   while( (!q.empty()) &&
 	 (process_all || (q.front().pos < upto_pos))) {
+
+    ++sites_encountered;
+
+    // exclude sites with not enough reads covering
+    if (q.front().nreads < min_coverage) {
+      ++sites_excluded_cov;
+      q.pop_front();
+      continue;
+    }
+
     cout << ref_id << "\t"
 	 << 1+(q.front().pos) << "\t"
 	 << q.front().ref << "\t"
@@ -89,7 +107,7 @@ void process_queue(deque<Pileup> &q, int upto_pos, bool process_all,
 }
 
 /////////////////////
-class DNAComplementer {
+/*class DNAComplementer {
   char c[256];
 public:
   DNAComplementer() { 
@@ -103,37 +121,89 @@ public:
       c[toupper(i)] = char(toupper(c[int(i)]));
   }
   char operator () (char x) const { return c[int(x)]; }
-};
+  };*/
 
 /////////////////////
 
-int rnapileup_main(const vector<string> &raw_args) {
-  vector<string> opts;
-  vector<string> args;
+void print_usage(const vector<string> &args, bool options_only=false) {
+  if (!options_only) {
+    cerr << "USAGE: " << args[0] << " [OPTIONS] reads.bam genome.fasta\n\n"
+	 << "    OPTIONS:\n";
+  }
+  cerr   << "      --exclude-ends         Exclude 5' and 3' ends of reads\n"
+         << "      --min-q=N              Exclude bases with Q score < N (15)\n"
+         << "      --min-coverage=N       Exclude sites with < N reads covering (10)\n"
+	 << "      --not-strand-specific  Library not strand-specific (convert everything to +)\n";
 
-  for(unsigned int i=1; i < raw_args.size(); ++i)
-    if (raw_args[i].size() > 1 && raw_args[i][0] == '-')
-      opts.push_back(raw_args[i]);
-    else
-      args.push_back(raw_args[i]);
+}
 
-  bool opts_valid = true;
-  bool no_ss = false;         // not strand specific
-  for(unsigned int i=0; i < opts.size(); ++i) {
-    if (opts[i] == "--noss")
+int rnapileup_main(const vector<string> &args) {
+  arg_collection value_args;
+  vector<string> positional_args;
+
+  parse_arguments(args, value_args, positional_args);
+
+  // library not stand specific
+  bool no_ss = false;
+  bool exclude_ends = false;
+  int min_coverage = 10;
+  int min_q = 15;
+
+  // collect and validate command line arguments
+  for (arg_collection::iterator it = value_args.begin();
+       it != value_args.end(); ++it) {
+    string key = it->first;
+    string value = it->second;
+    bool conv_success = false;
+
+    if (key == "--not-strand-specific") {
       no_ss = true;
-    else
-      opts_valid = false;
+
+    } else if (key == "--exclude-ends") {
+      exclude_ends = true;
+
+    } else if (key == "--min-q") {
+      min_q = from_s<int>(value, conv_success);
+      if (!conv_success || (min_q < 0)) {
+	cerr << "Invalid value for --min-q: " << value << "; must be a non-negative integer\n";
+	return(1);
+      }
+
+    } else if (key == "--min-coverage") {
+      min_coverage = from_s<int>(value, conv_success);
+      if (!conv_success || (min_coverage < 0)) {
+	cerr << "Invalid value for --min-coverage: "
+	     << value << "; must be a non-negative integer\n";
+	return(1);
+      }
+    } else if (key == "--list-options") {
+      print_usage(args, true);
+      return(0);
+
+    } else {
+      /*cerr << "Invalid option: " << key << "\n";
+      print_usage(args);
+      return(1);*/
+    }
   }
 
-  if(raw_args.size() < 2 || !opts_valid) {
-    cerr << "USAGE: " << raw_args[0] << " [options] reads.bam ref.fasta\n";
-    cerr << "       --noss        Not strand-specific (convert everything to +)\n";
-    return 1;
+  if (positional_args.size() < 3) {
+    print_usage(args);
+    return(1);
   }
 
-  string bam_fn( args[0] );
-  string fas_fn( args[1] );
+  string bam_fn( positional_args[1] );
+  string fas_fn( positional_args[2] );
+
+  // output supplied arguments
+  cerr << "  Processing BAM file " << bam_fn << "\n";
+  cerr << "  Using genome fasta file " << fas_fn << "\n";
+  if (no_ss)
+    cerr << "  Treating library as non-stand-specific\n";
+  if (exclude_ends)
+    cerr << "  Excluding ends of reads\n";
+  cerr << "  Requiring Q-score >= " << min_q << "\n";
+  cerr << "  Requiring " << min_coverage << " coverage at a site\n";
 
   // index the fasta file by finding out where each chr starts
   ifstream file(fas_fn.c_str());
@@ -144,7 +214,6 @@ int rnapileup_main(const vector<string> &raw_args) {
 
   faidx_t *fai = fai_load(fas_fn.c_str());
 
-
   bamFile bam_file;
   bam_header_t *bam_hdr;
 
@@ -153,6 +222,7 @@ int rnapileup_main(const vector<string> &raw_args) {
     return 1;
   }
 
+  // read BAM header
   bam_hdr = bam_header_read(bam_file);
   bam1_t *bam = bam_init1();
 
@@ -169,8 +239,16 @@ int rnapileup_main(const vector<string> &raw_args) {
   bases[8] = 'T';
   bases[15] = 'N';
 
-  //ReverseComplementer rev_comp;
+  // track numbers for filtered bases
+  unsigned long bases_excluded_end = 0;
+  unsigned long bases_excluded_q = 0;
+  unsigned long bases_encountered = 0;
+  unsigned long sites_excluded_cov = 0;
+  unsigned long sites_encountered = 0;
 
+
+  // maintain a queue of pileup data and output sites (process_queue)
+  // when we encounter a read that starts after them
   deque<Pileup> q;
 
   while( bam_read1(bam_file, bam) > 0 ) {
@@ -190,7 +268,8 @@ int rnapileup_main(const vector<string> &raw_args) {
     bool has_indels(false);
     int nclipstart(0);
     int nclipend(0);
-
+    
+    // check the CIGAR string for various operations
     for(int i=0; i < bam->core.n_cigar; ++i) {
       // discards reads with indels
       if (bam_cigar_op(bam1_cigar(bam)[i]) == BAM_CINS || 
@@ -199,6 +278,7 @@ int rnapileup_main(const vector<string> &raw_args) {
 	break;
       }
 
+      // note soft-clipping so we can ignore those bases
       if (bam_cigar_op(bam1_cigar(bam)[i]) == BAM_CSOFT_CLIP) {
 	if (i == 0)
 	  nclipstart = bam_cigar_oplen(bam1_cigar(bam)[i]);
@@ -210,14 +290,15 @@ int rnapileup_main(const vector<string> &raw_args) {
     if (has_indels)
       continue;
 
-
     // get chr name for this bam line
     string ref( bam_hdr->target_name[bam->core.tid] );
 
-    // load chr sequence 
+    // load genomic sequence for this chromosome
     if (ref != curr_ref) {
-      cerr << "Encountered new ref: " << ref << "; loading...";
+      cerr << "Loading sequence for " << ref << " ...";
+
       if (ref_seq) {
+	// deallocate previous chr sequence
 	free(ref_seq);
 	changed_ref = true;
 	prev_ref = curr_ref;
@@ -225,11 +306,15 @@ int rnapileup_main(const vector<string> &raw_args) {
 	// initialize prev_ref to ref
 	prev_ref = ref;
       }
+
       curr_ref = ref;
       ref_seq = fai_fetch(fai, ref.c_str(), &ref_len);
+
+      // convert sequence to uppercase
       for(int i=0; i < ref_len; ++i)
 	ref_seq[i] = toupper(ref_seq[i]);
-      cerr << " loaded\n";
+
+      cerr << "done.\n";
       cerr.flush();
     }
     
@@ -242,9 +327,10 @@ int rnapileup_main(const vector<string> &raw_args) {
     string read_id(bam1_qname(bam));
 #endif
 
-   
-    //if (nclipstart != 0 || nclipend != 0)
-    //  cerr << "Soft-clipped: (" << nclipstart << ", " << nclipend << "\n";
+#ifdef DEBUGMODE
+    if (nclipstart != 0 || nclipend != 0)
+      cerr << "Soft-clipped: (" << nclipstart << ", " << nclipend << "\n";
+#endif
 
     // remove all the soft-clipped bases from the start
     read_seq.erase(0, nclipstart);
@@ -253,8 +339,10 @@ int rnapileup_main(const vector<string> &raw_args) {
     
     // process queue
     process_queue(q, read_pos, changed_ref, 
-		  changed_ref ? prev_ref : curr_ref);
-
+		  changed_ref ? prev_ref : curr_ref,
+		  min_coverage,
+		  sites_excluded_cov,
+		  sites_encountered);
 
     // build read seq
     for(int i=0; i < (read_len-nclipend); ++i) {
@@ -265,6 +353,8 @@ int rnapileup_main(const vector<string> &raw_args) {
 
     bool rev_strand = bam1_strand(bam);
 
+    // for this read, simultaneously loop through its sequence
+    // and the pileup queue
     deque<Pileup>::iterator q_it( q.begin() );
     for(int i=0; i < (read_len-nclipend); ++i, ++q_it) {
       int g(read_pos + i);  // genomic position
@@ -276,9 +366,27 @@ int rnapileup_main(const vector<string> &raw_args) {
 	q.push_back(Pileup(g));
 	q_it = q.end()-1;
       }
+
+      // skip clipped bases
+      if ( i < nclipstart || i > ((read_len-nclipend)-1) )
+	continue;
+
+      ++bases_encountered;
+
+      // exclude read-ends
+      if (exclude_ends && 
+	  ((i == 0) || (i == (read_len - 1))) ) {
+	++bases_excluded_end;
+	continue;
+      }
+      // exclude low-quality bases
+      if ((int(read_qual[i])-33) < min_q) {
+	++bases_excluded_q;
+	continue;
+      }
+
       if (q_it->pos != g) {
-	cerr << "ASSERT: read pos " << g
-	     << " != queue pos " << q_it->pos << "\n";
+	cerr << "ERROR: read pos " << g << " != queue pos " << q_it->pos << "\n";
 #ifdef DEBUGMODE
 	cerr << read_pos << " " << read_id << "\n";
 #endif
@@ -286,12 +394,7 @@ int rnapileup_main(const vector<string> &raw_args) {
       }
 
       // cout << read_seq[i] << " vs " << ref_seq[g] << "\n";
-
-
-      // skip clipped bases
-      if ( i < nclipstart || i > ((read_len-nclipend)-1) )
-	continue;
-      
+     
       if (i == 0)
 	q_it->pileup += (rev_strand && !no_ss) ? "$" : "^~";
       if (i == ((read_len-nclipend) - 1))
@@ -299,7 +402,7 @@ int rnapileup_main(const vector<string> &raw_args) {
 
       // make sure we don't go past end of ref seq
       if (g >= ref_len) {
-	cerr << "ASSERT: genomic pos " << g << " >= " << ref_len << "\n";
+	cerr << "ERROR: genomic pos " << g << " >= chr length (" << ref_len << ")\n";
 	return 1;
       }
 
@@ -309,9 +412,7 @@ int rnapileup_main(const vector<string> &raw_args) {
 	q_it->pileup += (rev_strand && !no_ss) ? tolower(read_seq[i]) : read_seq[i];
 
       q_it->readpos += char(33 + ((rev_strand && !no_ss) ? (read_len-(1+i)) : i));
-
       q_it->ref = ref_seq[g];
-
       q_it->quals += read_qual[i];
 
 #ifdef DEBUGMODE
@@ -319,12 +420,26 @@ int rnapileup_main(const vector<string> &raw_args) {
 #endif
 
       ++(q_it->nreads);
-      
     }
-    
   }
 
   // process queue
-  process_queue(q, 0, true, curr_ref);
+  process_queue(q, 0, true, curr_ref, min_coverage,
+		sites_excluded_cov, sites_encountered);
+
+  // output statistics
+  double bases_excluded_end_pct = 100.0 * double(bases_excluded_end) / 
+    double(bases_encountered);
+  double bases_excluded_q_pct = 100.0 * double(bases_excluded_q) / 
+    double(bases_encountered);
+  double sites_excluded_cov_pct = 100.0 * double(sites_excluded_cov) / 
+    double(sites_encountered);
+
+  cerr << "Bases encountered: " << bases_encountered << "\n"
+       << "Bases excluded due to being on read-end: " << setw(3) << bases_excluded_end_pct << "%\n"
+       << "Bases excluded due to low Q: " << setw(3) << bases_excluded_q_pct << "%\n"
+       << "Sites encountered: " << sites_encountered << "\n"
+       << "Sites excluded due to low coverage: " << setw(3) << sites_excluded_cov_pct << "%\n";
+
   return 0;
 }

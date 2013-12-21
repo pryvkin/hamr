@@ -21,7 +21,7 @@
 
 # takes mismatch bed file on stdin and counts nucleotide
 #   frequencies at each site, resulting in a 
-# nucleotide frequency table
+#   nucleotide frequency table (zero-based coords)
 
 awk '
 function init() {

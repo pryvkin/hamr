@@ -53,12 +53,10 @@ int main(int argc, char **argv) {
   for(int i=2; i < argc; ++i)
     args.push_back(argv[i]);
 
-  test_parse_arguments(args);
+  //test_parse_arguments(args);
 
   if (cmd == "rnapileup")
     return (rnapileup_main(args));
-  else if (cmd == "filter_pileup")
-    return (filter_pileup_main(args));
   else if (cmd == "rnapileup2mismatchbed")
     return (rnapileup2mismatchbed_main(args));
   else {

@@ -21,11 +21,11 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <sstream>
 
 using namespace std;
 
 int rnapileup_main (const vector<string> &args);
-int filter_pileup_main (const vector<string> &args);
 int rnapileup2mismatchbed_main (const vector<string> &args);
 
 // key=value command line arguments
@@ -35,4 +35,14 @@ void parse_arguments(const vector<string> &args,
 		     arg_collection &value_args,
 		     vector<string> &positional_args);
 
+// convert value from string (usually to int)
+// and set the success variable on success
+template< typename T >
+inline T from_s(const std::string& str, bool &success) {
+  std::istringstream iss(str);
+  T result;
+  iss >> std::ws >> result >> std::ws;
+  success = iss.eof();
+  return result;
+}
 

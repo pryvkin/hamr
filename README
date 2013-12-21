@@ -2,7 +2,7 @@
 Uses nucleotide patterns in RNA-seq to infer the presence of non-canonical
 (covalently modified) nucleotides and/or RNA edits.
 
-=== HAMR v1.0.0 ===
+=== HAMR v1.2.0 ===
 
 === Building / Installation
 See the "INSTALL" file.
@@ -11,58 +11,55 @@ See the "INSTALL" file.
 === Usage
 == Required input files
  - BAM file (aligned sequence reads, preferably produced by Bowtie)
+    - Note: BAM must be sorted
+    - Note: BAM file should only contain uniquely-mapping reads,
+              or multimapping reads should be dealt with in some other way
+              prior to running HAMR. Cross-mapping reads can cause
+              spurious results at high-copy-number loci.
  - Genome sequence FASTA file (must be the same one used to generate the BAM)
 
-== Steps
-1) Run genome_scan.sh
-Type ./genome_scan.sh to see the list of parameters
+== Running HAMR
 
-= Example:
-# require Q-score of 30, at least 10 reads covering,
-#   assume 1% basecall error, strict null hypothesis,
-#   don't use raw p-value, control for FDR < 5%
-#   write results to "hamr.out," disregard mismatches
-#   on the ends of reads, and assume a strand-specific library
-./genome_scan.sh genome.fasta 30 10 0.01 H4 1 0.05 hamr.out 1 0
+./hamr.sh [OPTIONS] reads.bam genome.fasta output_prefix
 
-== Description of parameters
-in_bam
-    Input BAM file
+The output will be named <output_prefix>_mods.txt
 
-genome_fas
-    Input FASTA file with genomic sequence
+Type ./hamr.sh --help to see a complete list of options
 
-min_q (0-40)
-    Minimum base call Q score to consider a site. Recommended: 30
 
-min_coverage (>1)
-    Minimum coverage at a site to consider it. Recommended: 10
+= Examples
+# Require minimum Q score at bases to be 30
+#   and place output in output/hamr_mods.txt
+./hamr.sh reads.bam genome.fasta output/hamr --min-q=30 
 
-seq_err (0-1)
-    Assumed basecalling error rate. Recommended: 0.01
+# Ignore 5' and 3' termini of read sequences
+./hamr.sh reads.bam genome.fasta output/hamr --exclude-ends
 
-hypothesis (H1 or H4)
-    H1 (H0_1 in the paper) calls any non-reference nucleotide a candidate site. This should be used
-      when the sequenced genome is unlikely to have polymorphisms relative to the
-      reference (as in the case of a monogenic model organism)
-    H4 (H0_2 in the paper) calls any non-bi-allelic site a candidate site. This model is stricter
-      since not only must a significant number of non-reference calls be present,
-      3 or 4 distinct nucleotides must be detected.
+== HAMR Output format
 
-max_p (0-1)
-    p-value cutoff for statistical significance. Set to 1 to force usage of FDR instead of p.
+The output is a tab-delimited text file with each row being a site
+that was tested for the presence of modifications.
 
-max_fdr (0-1)
-    FDR-controlled p-value cutoff. Set to 1 to force usage of p-value instead.
+Columns descriptions:
+chr       Chromosome
+bp        Location on chromosome (zero-based)
+strand    Genomic strand of site
+refnuc    Reference nucleotide in genomic sequence
+A,C,G,T   Observed read counts for each nucleotide at this site
+nonref    Count of reads with a mismatch to the reference
+ref       Count of reads matching the reference
+h1.p      Unadjusted p-value for null hypothesis H0_1
+h1.padj   FDR-adjusted p-value for null hypothesis H0_1
+h4.p      Unadjusted p-value for null hypothesis H0_4
+h4.padj   FDR-adjusted p-value for null hypothesis H0_4
+sig       "TRUE" if statistically significant, "FALSE" otherwise
 
-out_file
-    Output file containing the called sites
+=== Citing
+If you use this software, please cite the following:
 
-filter_ends (0 or 1)
-    If set to 1, HAMR will ignore the 5' and 3' ends of reads when looking for candidate sites.
-
-not_strand_specific (0 or 1)
-    Set this to 1 when the sequencing library is NOT strand-specific.
+Ryvkin P, Leung YY, Silverman IM, Childress M, Valladares O, Dragomir I,
+Gregory BD, Wang LS. HAMR: high-throughput annotation of modified
+ribonucleotides. RNA. 2013 Dec;19(12):1684-92.
 
 
 === License
