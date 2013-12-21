@@ -2,20 +2,22 @@
 Uses nucleotide patterns in RNA-seq to infer the presence of non-canonical
 (covalently modified) nucleotides and/or RNA edits.
 
-
-=== Required input files
- - BAM file (aligned sequence reads, preferably produced by Bowtie)
- - Genome sequence FASTA file (must be the same one used to generate the BAM)
+=== HAMR v1.0 ===
 
 === Building / Installation
 See the "INSTALL" file.
 
 
 === Usage
+== Required input files
+ - BAM file (aligned sequence reads, preferably produced by Bowtie)
+ - Genome sequence FASTA file (must be the same one used to generate the BAM)
 
+== Steps
 1) Run genome_scan.sh
 Type ./genome_scan.sh to see the list of parameters
 
+= Example:
 # require Q-score of 30, at least 10 reads covering,
 #   assume 1% basecall error, strict null hypothesis,
 #   don't use raw p-value, control for FDR < 5%
@@ -23,7 +25,7 @@ Type ./genome_scan.sh to see the list of parameters
 #   on the ends of reads, and assume a strand-specific library
 ./genome_scan.sh genome.fasta 30 10 0.01 H4 1 0.05 hamr.out 1 0
 
-=== Description of parameters
+== Description of parameters
 in_bam
     Input BAM file
 
@@ -63,7 +65,7 @@ not_strand_specific (0 or 1)
     Set this to 1 when the sequencing library is NOT strand-specific.
 
 
-====
+=== License
 #  Copyright (c) 2013 University of Pennsylvania
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a 
