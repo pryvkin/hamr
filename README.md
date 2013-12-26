@@ -15,3 +15,7 @@ Ryvkin P, Leung YY, Silverman IM, Childress M, Valladares O, Dragomir I,
 Gregory BD, Wang LS. HAMR: high-throughput annotation of modified
 ribonucleotides. RNA. 2013 Dec;19(12):1684-92.
 
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/pryvkin/hamr/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
